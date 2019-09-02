@@ -25,7 +25,7 @@ class Radio:
     def __init__(self):
         self.sdr = RtlSdr()
         self.offset = 250000
-        self.rate = 1140000
+        self.rate = 1200000
         self.sdr.gain = 'auto'
         self.sdr.sample_rate = self.rate
 
@@ -42,8 +42,8 @@ class Radio:
         f = -1.0j * 2.0 * np.pi * self.offset / rate
         s *= np.exp(f * np.arange(len(s)))
         # downsample to FM bandwidth
-        d = int(rate / bandwidth)  
-        s = signal.decimate(s, d)  
+        d = int(rate / bandwidth)
+        s = signal.decimate(s, d)
         rate2 = rate / d  
         # polar discriminator
         s = np.angle(s[1:] * np.conj(s[:-1]))
@@ -53,7 +53,7 @@ class Radio:
         # resample to 44100
         s = signal.decimate(s, int(rate2 / 44100))
         # scale volume
-        s *= 10000 / np.max(np.abs(s))  
+        s *= 10000 / np.max(np.abs(s))
         return s.astype("int16")
 
 
@@ -98,7 +98,6 @@ def main():
     try:
         while True:
             freq = min_freq + random.random() * (max_freq - min_freq)
-            freq = round(freq * 10) / 10
             s = radio.capture_fm(freq, duration)
             sound = pygame.sndarray.numpysnd.make_sound(s)
             sound.play()
@@ -107,7 +106,7 @@ def main():
         print('')
     except Exception as e:
         print(e)
-    radio.sdr.close()  
+    radio.sdr.close()
     pygame.mixer.quit()
 
 if __name__ == '__main__':
