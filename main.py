@@ -22,10 +22,10 @@ except ImportError:
 
 class Radio:
 
-    def __init__(self):
+    def __init__(self, rate=1200000, offset=250000):
         self.sdr = RtlSdr()
-        self.offset = 250000
-        self.rate = 1200000
+        self.rate = rate
+        self.offset = offset
         self.sdr.gain = 'auto'
         self.sdr.sample_rate = self.rate
 
@@ -60,6 +60,12 @@ class Radio:
 def main():
     parser = argparse.ArgumentParser(description='SDR spirit box.')
     parser.add_argument(
+        '--rate',
+        type=int,
+        default=1200000,
+        help='sample rate for SDR device in Hz (default=1200000)'
+    )
+    parser.add_argument(
         '--delay',
         type=float,
         default=0.0,
@@ -90,11 +96,12 @@ def main():
         print('pygame not installed, try: pip install pygame')
         exit(1)
     pygame.mixer.init(44100, -16, 1)
-    radio = Radio()
+    rate = args.rate
     delay = args.delay
     duration = args.duration
     min_freq = args.min
     max_freq = args.max
+    radio = Radio(rate=rate)
     try:
         while True:
             freq = min_freq + random.random() * (max_freq - min_freq)
