@@ -30,16 +30,20 @@ class Radio:
         self.sdr.gain = 'auto'
         self.sdr.sample_rate = self.rate
 
-    def capture_fm(self, seconds):
-        bandwidth = 200000
-        freq = self.freq
+    def stream(self, seconds):
+        sdr = self.sdr
         rate = self.rate
         n = int(seconds * rate)
+        # these SDR modules seem to want kb multiples
         n = n - (n % 1024)
-        f = int(freq * 1.0e6)
-        self.sdr.center_freq = f - self.offset
-        s = self.sdr.read_samples(n)
-        s = np.array(s).astype("complex64")
+        while True:
+            sdr.center_freq = int(self.freq * 1000000) - self.offset
+            s = np.array(sdr.read_samples(n))
+            yield self.decode_fm(s.astype('complex64'))
+
+    def decode_fm(self, s):
+        bandwidth = 200000
+        rate = self.rate
         # shift signal
         f = -1.0j * 2.0 * np.pi * self.offset / rate
         s *= np.exp(f * np.arange(len(s)))
@@ -105,9 +109,8 @@ def main():
     f1 = args.max
     radio = Radio(rate=rate)
     try:
-        while True:
+        for s in radio.stream(duration):
             radio.freq = f0 + random.random() * (f1 - f0)
-            s = radio.capture_fm(duration)
             sound = pygame.sndarray.numpysnd.make_sound(s)
             sound.play()
             pygame.time.wait(int(delay * 1000))
