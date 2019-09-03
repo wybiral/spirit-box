@@ -22,15 +22,17 @@ except ImportError:
 
 class Radio:
 
-    def __init__(self, rate=1200000, offset=250000):
+    def __init__(self, freq=0, rate=1200000, offset=250000):
         self.sdr = RtlSdr()
+        self.freq = freq
         self.rate = rate
         self.offset = offset
         self.sdr.gain = 'auto'
         self.sdr.sample_rate = self.rate
 
-    def capture_fm(self, freq, seconds):
+    def capture_fm(self, seconds):
         bandwidth = 200000
+        freq = self.freq
         rate = self.rate
         n = int(seconds * rate)
         n = n - (n % 1024)
@@ -86,7 +88,7 @@ def main():
     parser.add_argument(
         '--max',
         type=float,
-        default=109,
+        default=110,
         help='maximum scan frequency (default=109)'
     )
     args = parser.parse_args()
@@ -99,13 +101,13 @@ def main():
     rate = args.rate
     delay = args.delay
     duration = args.duration
-    min_freq = args.min
-    max_freq = args.max
+    f0 = args.min
+    f1 = args.max
     radio = Radio(rate=rate)
     try:
         while True:
-            freq = min_freq + random.random() * (max_freq - min_freq)
-            s = radio.capture_fm(freq, duration)
+            radio.freq = f0 + random.random() * (f1 - f0)
+            s = radio.capture_fm(duration)
             sound = pygame.sndarray.numpysnd.make_sound(s)
             sound.play()
             pygame.time.wait(int(delay * 1000))
