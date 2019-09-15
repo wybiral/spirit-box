@@ -1,6 +1,9 @@
 import argparse
 import asyncio
 import random
+import signal as sig
+
+running = False
 
 try:
     import numpy as np
@@ -75,7 +78,8 @@ class Radio:
         return s.astype("int16")
 
 
-async def main():
+async def main(loop):
+    global running
     parser = argparse.ArgumentParser(description='SDR spirit box.')
     parser.add_argument(
         '--rate',
@@ -120,17 +124,29 @@ async def main():
     f0 = args.min
     f1 = args.max
     radio = Radio(freq=f0, rate=rate)
+    running = True
     async for s in radio.stream(args.duration):
+        if not running:
+            break
         print('frequency=%.02f' % radio.freq)
         s = radio.decode_fm(s)
         sound = numpysnd.make_sound(s)
         sound.play()
         radio.set_freq(f0 + random.random() * (f1 - f0))
         await asyncio.sleep(d)
+    await radio.sdr.stop()
+    radio.sdr.close()
+    pygame.mixer.quit()
+    loop.stop()
+
+def handle_sigint(loop, future):
+    global running
+    running = False
+    print('\nStopping...')
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        pass
+    future = asyncio.gather(main(loop))
+    loop.add_signal_handler(sig.SIGINT, handle_sigint, loop, future)
+    loop.run_forever()
+    print('Done!')
