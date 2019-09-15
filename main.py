@@ -1,9 +1,5 @@
 import argparse
-import asyncio
 import random
-import signal as sig
-
-running = False
 
 try:
     import numpy as np
@@ -34,27 +30,16 @@ class Radio:
         self.sdr.gain = 'auto'
         self.sdr.sample_rate = self.rate
 
-    def set_freq(self, freq):
-        self.freq = freq
-        self.sdr.center_freq = int(freq * 1000000) - self.offset
-
-    async def stream(self, seconds):
+    def stream(self, seconds):
         sdr = self.sdr
         rate = self.rate
         n = int(seconds * rate)
         # these SDR modules seem to want kb multiples
         n = n - (n % 1024)
-        b = None
-        async for x in self.sdr.stream():
-            if b is None:
-                b = x
-            else:
-                b = np.concatenate((b, x))
-            if len(b) < n:
-                continue
-            s, b = b[:n], b[n:]
-            s = np.array(s)
-            yield s.astype('complex64')
+        while True:
+            sdr.center_freq = int(self.freq * 1000000) - self.offset
+            s = np.array(sdr.read_samples(n))
+            yield self.decode_fm(s.astype('complex64'))
 
     def decode_fm(self, s):
         bandwidth = 200000
@@ -78,8 +63,7 @@ class Radio:
         return s.astype("int16")
 
 
-async def main(loop):
-    global running
+def main():
     parser = argparse.ArgumentParser(description='SDR spirit box.')
     parser.add_argument(
         '--rate',
@@ -90,7 +74,7 @@ async def main(loop):
     parser.add_argument(
         '--delay',
         type=float,
-        default=0.2,
+        default=0.0,
         help='delay between scans in seconds (default=0)'
     )
     parser.add_argument(
@@ -114,39 +98,28 @@ async def main(loop):
     args = parser.parse_args()
     try:
         import pygame
-        from pygame.sndarray import numpysnd
     except ImportError:
         print('pygame not installed, try: pip install pygame')
         exit(1)
     pygame.mixer.init(44100, -16, 1)
     rate = args.rate
-    d = args.delay
+    delay = args.delay
+    duration = args.duration
     f0 = args.min
     f1 = args.max
-    radio = Radio(freq=f0, rate=rate)
-    running = True
-    async for s in radio.stream(args.duration):
-        if not running:
-            break
-        print('frequency=%.02f' % radio.freq)
-        s = radio.decode_fm(s)
-        sound = numpysnd.make_sound(s)
-        sound.play()
-        radio.set_freq(f0 + random.random() * (f1 - f0))
-        await asyncio.sleep(d)
-    await radio.sdr.stop()
+    radio = Radio(rate=rate)
+    try:
+        for s in radio.stream(duration):
+            radio.freq = f0 + random.random() * (f1 - f0)
+            sound = pygame.sndarray.numpysnd.make_sound(s)
+            sound.play()
+            pygame.time.wait(int(delay * 1000))
+    except KeyboardInterrupt:
+        print('')
+    except Exception as e:
+        print(e)
     radio.sdr.close()
     pygame.mixer.quit()
-    loop.stop()
-
-def handle_sigint(loop, future):
-    global running
-    running = False
-    print('\nStopping...')
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    future = asyncio.gather(main(loop))
-    loop.add_signal_handler(sig.SIGINT, handle_sigint, loop, future)
-    loop.run_forever()
-    print('Done!')
+    main()
